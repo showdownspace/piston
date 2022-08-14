@@ -15,7 +15,8 @@ help_msg(){
 
 cleanup(){
     echo "Exiting..."
-    docker stop builder_piston_instance && docker rm builder_piston_instance
+    docker logs builder_piston_instance || true
+    docker rm -f builder_piston_instance
 }
 
 fetch_packages(){
@@ -28,15 +29,29 @@ fetch_packages(){
         -dit \
         -p $port:2000 \
         --name builder_piston_instance \
+        --restart always \
         ghcr.io/engineer-man/piston
-    
+
     # Ensure the CLI is installed
     cd ../cli
     npm i
     cd -
 
     # Evalulate the specfile
-    ../cli/index.js -u "http://127.0.0.1:$port" ppman spec $1   
+    local specfile="$1"
+    ../cli/index.js -u "http://127.0.0.1:$port" ppman spec $specfile || {
+        echo "Error... Retrying (1)"
+        sleep 10
+        ../cli/index.js -u "http://127.0.0.1:$port" ppman spec $specfile
+    } || {
+        echo "Error... Retrying (2)"
+        sleep 10
+        ../cli/index.js -u "http://127.0.0.1:$port" ppman spec $specfile
+    } || {
+        echo "Error... Retrying (3)"
+        sleep 10
+        ../cli/index.js -u "http://127.0.0.1:$port" ppman spec $specfile
+    }
 }
 
 build_container(){
